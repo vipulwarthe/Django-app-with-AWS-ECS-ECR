@@ -2,11 +2,11 @@ pipeline {
     agent any
     environment {
         AWS_REGION = "us-east-1"
-        ACCOUNT_ID = "<YOUR-ACCOUNT-ID>"
-        IMAGE_REPO = "<YOUR-ACCOUNT-ID>.dkr.ecr.us-east-1.amazonaws.com/django-ecs-ecr"
+        ACCOUNT_ID = "717279727098"
+        IMAGE_REPO = "717279727098.dkr.ecr.us-east-1.amazonaws.com/django-ecr-ecs:latest"
         IMAGE_TAG  = "${env.BUILD_NUMBER}"
-        AWS_ACCESS_KEY_ID     = credentials('aws-access-key-id')     // Jenkins credential ID
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+        AWS_ACCESS_KEY_ID     = credentials('AKIA2OAJUBX5B3C4YLO5')     // Jenkins credential ID
+        AWS_SECRET_ACCESS_KEY = credentials('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')
     }
 
     stages {
