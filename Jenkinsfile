@@ -1,51 +1,71 @@
 pipeline {
     agent any
+
     environment {
         AWS_REGION = "us-east-1"
         ACCOUNT_ID = "717279727098"
-        IMAGE_REPO = "717279727098.dkr.ecr.us-east-1.amazonaws.com/django-ecr-ecs:latest"
-        IMAGE_TAG  = "${env.BUILD_NUMBER}"
-        AWS_ACCESS_KEY_ID     = credentials('AKIA2OAJUBX5B3C4YLO5')     // Jenkins credential ID
-        AWS_SECRET_ACCESS_KEY = credentials('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')
+        ECR_REPOSITORY = "django-ecr-ecs"     // repo name only
+        IMAGE_TAG = "${BUILD_NUMBER}"
+
+        // Jenkins credential IDs (DO NOT put real access keys here)
+        AWS_ACCESS_KEY_ID     = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
     }
 
     stages {
+
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t django-ecs-ecr:${IMAGE_TAG} .'
-            }
-        }
-        
-
-        stage('Push to ECR') {
-            steps {
-                sh '''
-                aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $IMAGE_REPO
-                docker tag django-ecs-ecr:${IMAGE_TAG} $IMAGE_REPO:${IMAGE_TAG}
-                docker push $IMAGE_REPO:${IMAGE_TAG}
-                '''
+                sh """
+                docker build -t ${ECR_REPOSITORY}:${IMAGE_TAG} .
+                """
             }
         }
 
-        stage('Deploy') {
+        stage('Login to ECR') {
             steps {
-                sh '''
+                sh """
+                aws ecr get-login-password --region ${AWS_REGION} | \
+                docker login --username AWS \
+                --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                """
+            }
+        }
+
+        stage('Tag & Push Image') {
+            steps {
+                sh """
+                docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} \
+                ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}
+
+                docker push ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Deploy to ECS') {
+            steps {
+                sh """
                 aws ecs update-service \
                   --cluster django-ecs-ecr-cluster \
                   --service django-ecs-ecr-service \
                   --force-new-deployment \
-                  --region $AWS_REGION
-                '''
+                  --region ${AWS_REGION}
+                """
             }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline finished."
+        }
+        success {
+            echo "✅ Deploy successful!"
+        }
+        failure {
+            echo "❌ Pipeline failed!"
         }
     }
 }
 
-post {
-    always {
-            echo "Pipeline finished. Deployed successfully"
-    }
-    failure {
-        echo "Pipeline failed!"
-    }
-}
