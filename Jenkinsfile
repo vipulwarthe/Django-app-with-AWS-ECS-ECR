@@ -4,7 +4,7 @@ pipeline {
     environment {
         AWS_REGION = "us-east-1"
         ACCOUNT_ID = "717279727098"
-        ECR_REPO_NAME = "django-ecr-ecs"
+        ECR_REPO_NAME = "django-ecr-repo"
         IMAGE_TAG = "${BUILD_NUMBER}"
     }
 
@@ -57,8 +57,8 @@ pipeline {
             steps {
                 sh """
                 aws ecs update-service \
-                    --cluster django-ecs-ecr-cluster \
-                    --service django-ecs-ecr-service \
+                    --cluster django-ecs-cluster \
+                    --service django-ecs-service \
                     --force-new-deployment \
                     --region ${AWS_REGION}
                 """
