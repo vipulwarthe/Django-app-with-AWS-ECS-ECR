@@ -4,7 +4,7 @@ pipeline {
     environment {
         AWS_REGION = "us-east-1"
         ACCOUNT_ID = "717279727098"
-        ECR_REPO_NAME = "django-ecr-repo"
+        ECR_REPO_NAME = "django-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
     }
 
