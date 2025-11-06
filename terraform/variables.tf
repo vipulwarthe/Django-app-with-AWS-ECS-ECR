@@ -5,7 +5,7 @@ variable "aws_region" {
 
 variable "project" {
   type    = string
-  default = "diabetes-app"
+  default = "django-app"
 }
 
 variable "vpc_cidr" {
