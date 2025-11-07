@@ -1,0 +1,23 @@
+{
+  "family": "django-task-family",
+  "executionRoleArn": "arn:aws:iam::717279727098:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::717279727098:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "containerDefinitions": [
+    {
+      "name": "django-container",
+      "image": "<IMAGE_PLACEHOLDER>",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ]
+    }
+  ]
+}
