@@ -143,35 +143,35 @@ Jenkins
 
 ✅ Install Docker:
 
-# Add Docker's official GPG key:
-sudo apt-get update
-sudo apt-get install ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
+    ## Add Docker's official GPG key:
+    sudo apt-get update
+    sudo apt-get install ca-certificates curl
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-# Add the repository to Apt sources:
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
+    ## Add the repository to Apt sources:
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    sudo apt-get update
 
-sudo apt install docker.io -y
-docker --version         
-sudo usermod -aG docker $USER
-sudo chown $USER /var/run/docker.sock   
-# OR give the below permissions to docker.sock 
-#sudo chmod 777 /var/run/docker.sock
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo systemctl status docker
+    sudo apt install docker.io -y
+    docker --version         
+    sudo usermod -aG docker $USER
+    sudo chown $USER /var/run/docker.sock   
+    # OR give the below permissions to docker.sock 
+    #sudo chmod 777 /var/run/docker.sock
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    sudo systemctl status docker
 
 I have created docker.sh file in repo just give the executable permission and run it for installtion of docker.
 
-vi docker.sh
-chmod +x docker.sh
-./docker.sh
+    vi docker.sh
+    chmod +x docker.sh
+    ./docker.sh
 
 ✅ Build Docker image:
 
@@ -244,21 +244,20 @@ Using Terraform we have created the ECR repo, ECS cluster, ECS service, task def
 
 I have created jenkins-install.sh shell script for installtion of jenkins.
 
-sudo apt update
-sudo apt install fontconfig openjdk-21-jre -y
-java -version
+    sudo apt update
+    sudo apt install fontconfig openjdk-21-jre -y
+    java -version
 
-sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
-  https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
-echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
-  https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
-  /etc/apt/sources.list.d/jenkins.list > /dev/null
-sudo apt update
-sudo apt install jenkins -y
-
-sudo systemctl enable jenkins
-sudo systemctl start jenkins
-sudo systemctl status jenkins
+    sudo wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+      https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+    echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
+      https://pkg.jenkins.io/debian-stable binary/ | sudo tee \
+      /etc/apt/sources.list.d/jenkins.list > /dev/null
+    sudo apt update
+    sudo apt install jenkins -y
+    sudo systemctl enable jenkins
+    sudo systemctl start jenkins
+    sudo systemctl status jenkins
 
 ✅ After installation of docker add jenkins to the docker group:
 
