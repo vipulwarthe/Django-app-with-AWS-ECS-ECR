@@ -9,8 +9,8 @@ pipeline {
         IMAGE_TAG       = "${BUILD_NUMBER}"
         ECS_CLUSTER     = "django-ecs-cluster"
         SERVICE_NAME    = "django-ecs-service"
-        TASK_DEF_NAME   = "django-ecs-task"
-        CONTAINER_NAME  = "django-container"
+        TASK_DEF_NAME   = "django_ecs_task"
+        CONTAINER_NAME  = "django_container"
     }
 
     stages {
