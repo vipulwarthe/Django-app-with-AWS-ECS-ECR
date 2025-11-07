@@ -9,8 +9,6 @@ pipeline {
         IMAGE_TAG       = "${BUILD_NUMBER}"
         ECS_CLUSTER     = "django-ecs-cluster"
         SERVICE_NAME    = "django-ecs-service"
-        TASK_FAMILY     = "django_ecs_task"
-        CONTAINER_NAME  = "django_container"
     }
 
     stages {
@@ -27,119 +25,100 @@ pipeline {
                     string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
                     string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
-                    sh '''
+                    sh """
                     aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
                     aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-                    aws configure set default.region '${AWS_REGION}'
-                    '''
+                    aws configure set default.region ${AWS_REGION}
+                    """
                 }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                docker build -t '${REPO_NAME}:${IMAGE_TAG}' .
-                '''
+                sh """
+                docker build -t ${REPO_NAME}:${IMAGE_TAG} .
+                """
             }
         }
 
         stage('Login to ECR') {
             steps {
-                sh '''
-                aws ecr get-login-password --region '${AWS_REGION}' \
-                | docker login --username AWS --password-stdin '${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com'
-                '''
+                sh """
+                aws ecr get-login-password --region ${AWS_REGION} \
+                | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                """
             }
         }
 
         stage('Create ECR Repo if Not Exists') {
             steps {
-                sh '''
+                sh """
+                echo "Checking if ECR repository exists..."
+
                 if ! aws ecr describe-repositories \
-                    --repository-names '${REPO_NAME}' >/dev/null 2>&1; then
+                    --repository-names ${REPO_NAME} \
+                    --region ${AWS_REGION} >/dev/null 2>&1; then
+
+                    echo "Creating ECR repo..."
                     aws ecr create-repository \
-                        --repository-name '${REPO_NAME}' \
-                        --image-scanning-configuration scanOnPush=true
+                        --repository-name ${REPO_NAME} \
+                        --image-scanning-configuration scanOnPush=true \
+                        --region ${AWS_REGION}
+
+                else
+                    echo "✅ ECR repo already exists!"
                 fi
-                '''
+                """
             }
         }
 
-        stage('Tag & Push Image') {
+        stage('Tag & Push Image to ECR') {
             steps {
-                sh '''
-                docker tag '${REPO_NAME}:${IMAGE_TAG}' '${ECR_URL}:${IMAGE_TAG}'
-                docker push '${ECR_URL}:${IMAGE_TAG}'
-                '''
+                sh """
+                docker tag ${REPO_NAME}:${IMAGE_TAG} ${ECR_URL}:${IMAGE_TAG}
+                docker push ${ECR_URL}:${IMAGE_TAG}
+                """
             }
         }
 
-        stage('Auto Update Task Definition') {
+        stage('Create ECS Cluster if Not Exists') {
             steps {
-                sh '''
-                echo "Fetching existing task definition..."
+                sh """
+                CLUSTER_STATUS=\$(aws ecs describe-clusters \
+                    --clusters ${ECS_CLUSTER} \
+                    --query "clusters[0].status" \
+                    --output text 2>/dev/null)
 
-                OLD_TASK_JSON=$(aws ecs describe-task-definition \
-                    --task-definition '${TASK_FAMILY}' \
-                    --query 'taskDefinition')
-
-                echo "Cleaning unnecessary fields..."
-
-                CLEANED_JSON=$(echo "$OLD_TASK_JSON" | sed \
-                    -e 's/"taskDefinitionArn": "[^"]*",//g' \
-                    -e 's/"revision": [0-9]*,//g' \
-                    -e 's/"status": "[^"]*",//g' \
-                    -e 's/"registeredAt": "[^"]*",//g' \
-                    -e 's/"registeredBy": "[^"]*",//g' \
-                    -e 's/"compatibilities": \\[[^]]*\\],//g')
-
-                echo "Updating container image..."
-
-                UPDATED_JSON=$(echo "$CLEANED_JSON" | \
-                    sed "s|\\\"image\\\": \\\".*\\\"|\\\"image\\\": \\\"${ECR_URL}:${IMAGE_TAG}\\\"|g")
-
-                echo "$UPDATED_JSON" > new-task-def.json
-
-                echo "Registering new task definition..."
-
-                NEW_TASK_ARN=$(aws ecs register-task-definition \
-                    --cli-input-json file://new-task-def.json \
-                    --query "taskDefinition.taskDefinitionArn" \
-                    --output text)
-
-                echo "$NEW_TASK_ARN" > task-arn.txt
-                echo "✅ New Task Registered: $NEW_TASK_ARN"
-                '''
+                if [ "\$CLUSTER_STATUS" = "ACTIVE" ]; then
+                    echo "✅ ECS Cluster already exists!"
+                else
+                    echo "Creating ECS Cluster..."
+                    aws ecs create-cluster --cluster-name ${ECS_CLUSTER}
+                fi
+                """
             }
         }
 
-        stage('Deploy to ECS Service') {
+        stage('Notify User') {
             steps {
-                sh '''
-                TASK_ARN=$(cat task-arn.txt)
-
-                echo "Deploying new task definition..."
-
-                aws ecs update-service \
-                    --cluster '${ECS_CLUSTER}' \
-                    --service '${SERVICE_NAME}' \
-                    --task-definition "$TASK_ARN" \
-                    --force-new-deployment
-
-                echo "✅ Deployment Triggered!"
-                '''
+                echo "✅ Image pushed successfully!"
+                echo "👉 Now create or update the ECS task definition manually in AWS console."
+                echo "👉 Then attach the new task definition to the ECS service."
             }
         }
     }
 
     post {
         success {
-            echo "✅ Deployment Successful!"
+            echo "✅ Pipeline Completed Successfully!"
         }
         failure {
-            echo "❌ Pipeline Failed. Cleaning Docker images..."
-            sh "docker rmi -f ${REPO_NAME}:${IMAGE_TAG} || true"
+            echo "❌ Pipeline Failed — Cleaning Docker images..."
+            sh """
+                docker rmi -f ${REPO_NAME}:${IMAGE_TAG} || true
+                docker image prune -f || true
+            """
         }
     }
 }
