@@ -2,20 +2,19 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION      = "us-east-1"
-        ACCOUNT_ID      = "717279727098"
-        ECR_REPO_NAME   = "django-ecr-ecs"
-        IMAGE_TAG       = "${BUILD_NUMBER}"
-        ECR_URI         = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
+        AWS_REGION    = "us-east-1"
+        ACCOUNT_ID    = "717279727098"
+        REPO_NAME     = "django-ecr-repo"
+        ECR_URL       = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
+        IMAGE_TAG     = "${BUILD_NUMBER}"
+        ECS_CLUSTER   = "django-ecs-cluster"
     }
 
     stages {
 
-        stage('Build Docker Image') {
+        stage('Checkout Code') {
             steps {
-                sh """
-                docker build -t ${ECR_REPO_NAME}:${IMAGE_TAG} .
-                """
+                checkout scm
             }
         }
 
@@ -26,11 +25,19 @@ pipeline {
                     string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
                     sh """
-                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-                    export AWS_DEFAULT_REGION=${AWS_REGION}
+                    aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+                    aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+                    aws configure set default.region ${AWS_REGION}
                     """
                 }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh """
+                docker build -t ${REPO_NAME}:${IMAGE_TAG} .
+                """
             }
         }
 
@@ -43,50 +50,75 @@ pipeline {
             }
         }
 
-        stage('Tag & Push Image') {
+        stage('Create ECR Repo') {
             steps {
                 sh """
-                docker tag ${ECR_REPO_NAME}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
-                docker push ${ECR_URI}:${IMAGE_TAG}
+                echo "Checking if ECR repo exists..."
+
+                if ! aws ecr describe-repositories \
+                    --repository-names ${REPO_NAME} \
+                    --region ${AWS_REGION} >/dev/null 2>&1; then
+
+                    echo "Creating ECR repo ${REPO_NAME} ..."
+                    aws ecr create-repository \
+                        --repository-name ${REPO_NAME} \
+                        --image-scanning-configuration scanOnPush=true \
+                        --region ${AWS_REGION}
+                else
+                    echo "✅ ECR repo ${REPO_NAME} already exists!"
+                fi
                 """
             }
         }
 
-        stage('Update ECS Task Definition') {
+        stage('Tag & Push Image to ECR') {
             steps {
                 sh """
-                TASK_NAME="django-ecs-task"
+                docker tag ${REPO_NAME}:${IMAGE_TAG} ${ECR_URL}:${IMAGE_TAG}
+                docker push ${ECR_URL}:${IMAGE_TAG}
+                """
+            }
+        }
 
-                echo "Fetching current task definition..."
-                CURRENT=\$(aws ecs describe-task-definition --task-definition \$TASK_NAME)
+        stage('Create ECS Cluster') {
+            steps {
+                sh """
+                echo "Checking if ECS cluster exists..."
 
-                NEW_DEF=\$(echo "\$CURRENT" | jq --arg IMAGE "${ECR_URI}:${IMAGE_TAG}" '
-                    .taskDefinition
-                    | .containerDefinitions[0].image = $IMAGE
-                    | del(.taskDefinitionArn, .status, .revision, .registeredAt, .registeredBy, .compatibilities)
-                ')
+                CLUSTER_STATUS=\$(aws ecs describe-clusters \
+                    --clusters ${ECS_CLUSTER} \
+                    --query "clusters[0].status" \
+                    --output text 2>/dev/null)
 
-                echo "\$NEW_DEF" > new-task-def.json
-
-                NEW_TASK_ARN=\$(aws ecs register-task-definition \
-                    --cli-input-json file://new-task-def.json \
-                    --query "taskDefinition.taskDefinitionArn" --output text)
-
-                aws ecs update-service \
-                    --cluster django-ecs-cluster \
-                    --service django-ecs-service \
-                    --task-definition "\$NEW_TASK_ARN" \
-                    --force-new-deployment
+                if [ "\$CLUSTER_STATUS" = "ACTIVE" ]; then
+                    echo "✅ ECS Cluster ${ECS_CLUSTER} already exists!"
+                else
+                    echo "Creating ECS Cluster..."
+                    aws ecs create-cluster \
+                        --cluster-name ${ECS_CLUSTER} \
+                        --region ${AWS_REGION}
+                fi
                 """
             }
         }
     }
 
     post {
-        success { echo "✅ Deployment successful!" }
-        failure { echo "❌ Pipeline failed!" }
+        success {
+            echo "✅ Image pushed & ECS Cluster is ready!"
+            echo "👉 Now go to AWS Console and create Task Definition & Service."
+        }
+        failure {
+            echo "❌ Pipeline Failed — Cleaning local Docker images..."
+            sh """
+            docker rmi -f ${REPO_NAME}:${IMAGE_TAG} || true
+            docker image prune -f || true
+            """
+        }
     }
 }
+
+
 
 
 
