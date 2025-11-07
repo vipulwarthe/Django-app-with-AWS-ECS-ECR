@@ -104,36 +104,47 @@ pipeline {
 
         stage('Register New Task Definition') {
             steps {
-                sh '''
-                echo "📌 Fetching current task definition..."
+                sh """
+                export TASK_DEF_NAME=${TASK_DEF_NAME}
+                export IMAGE_URL=${ECR_URL}:${IMAGE_TAG}
+                export CONTAINER_NAME=${CONTAINER_NAME}
 
-                CURRENT_DEF=$(aws ecs describe-task-definition \
-                    --task-definition "'${TASK_DEF_NAME}'" \
-                    --query "taskDefinition" \
-                    --output json)
+                echo "📌 Fetching $TASK_DEF_NAME..."
 
-                echo "$CURRENT_DEF" | jq \
-                    --arg IMAGE "'${ECR_URL}:${IMAGE_TAG}'" \
-                    --arg NAME "'${CONTAINER_NAME}'" \
+                CURRENT_DEF=\$(aws ecs describe-task-definition \
+                --task-definition \$TASK_DEF_NAME \
+                --query "taskDefinition" --output json)
+
+                echo "\$CURRENT_DEF" | jq \
+                --arg IMAGE "\$IMAGE_URL" \
+                --arg NAME "\$CONTAINER_NAME" \
                 '
                 .containerDefinitions[0].image = $IMAGE |
                 .containerDefinitions[0].name = $NAME |
-                del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities,
-                    .registeredAt, .registeredBy)
-                ' > new-task-def.json
+                del(
+                    .taskDefinitionArn,
+                    .revision,
+                    .status,
+                    .requiresAttributes,
+                    .compatibilities,
+                    .registeredAt,
+                    .registeredBy
+               )
+               ' > new-task-def.json
 
-                echo "📌 Registering updated task definition..."
-                NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
-                    --cli-input-json file://new-task-def.json \
-                    --query "taskDefinition.taskDefinitionArn" \
-                    --output text)
+               echo "📌 Registering new task definition..."
 
-                echo "✅ New Task Definition ARN: $NEW_TASK_DEF_ARN"
-                echo $NEW_TASK_DEF_ARN > task-arn.txt
-                '''
+               NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition \
+                   --cli-input-json file://new-task-def.json \
+                   --query "taskDefinition.taskDefinitionArn" \
+                   --output text)
+
+              echo "✅ New Task: \$NEW_TASK_DEF_ARN"
+              echo "\$NEW_TASK_DEF_ARN" > task-arn.txt
+              """
             }
         }
-
+        
         stage('Deploy to ECS Service') {
             steps {
                 sh '''
